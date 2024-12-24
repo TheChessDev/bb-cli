@@ -52,36 +52,67 @@ func saveCredentials(creds Credentials) error {
 	return json.NewEncoder(file).Encode(creds)
 }
 
+// RetrieveCredentials retrieves an API token or OAuth credentials.
+func RetrieveCredentials(serverURL string) (string, error) {
+	// Step 1: Check for the API token in the token file
+	apiToken, err := loadToken()
+	if err == nil && apiToken != "" {
+		return apiToken, nil
+	}
+
+	// Step 2: Fall back to the credentials file
+	creds, err := loadCredentials()
+	if err != nil {
+		return "", errors.New("no valid credentials found, please log in using `bb auth login`")
+	}
+
+	if creds.APIToken != "" {
+		return creds.APIToken, nil
+	}
+
+	return "", errors.New("no valid credentials found")
+}
+
+// loadToken reads the API token from the token file
+func loadToken() (string, error) {
+	tokenPath := getTokenPath()
+	data, err := os.ReadFile(tokenPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", errors.New("API token not found")
+		}
+		return "", fmt.Errorf("failed to read token file: %w", err)
+	}
+	return string(data), nil
+}
+
+// loadCredentials reads OAuth credentials from the credentials file
+func loadCredentials() (*Credentials, error) {
+	credsPath := getConfigPath()
+	data, err := os.ReadFile(credsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errors.New("credentials not found")
+		}
+		return nil, fmt.Errorf("failed to read credentials file: %w", err)
+	}
+
+	var creds Credentials
+	if err := json.Unmarshal(data, &creds); err != nil {
+		return nil, fmt.Errorf("failed to parse credentials file: %w", err)
+	}
+
+	return &creds, nil
+}
+
+// getTokenPath returns the path to the API token file
+func getTokenPath() string {
+	usr, _ := user.Current()
+	return filepath.Join(usr.HomeDir, ".config", "bb", "token")
+}
+
 // getConfigPath returns the path to the credentials file
 func getConfigPath() string {
 	usr, _ := user.Current()
 	return filepath.Join(usr.HomeDir, ".config", "bb", "credentials.json")
-}
-
-// RetrieveCredentials retrieves the credentials for a specific server URL
-func RetrieveCredentials(serverURL string) (*Credentials, error) {
-	configPath := getConfigPath()
-
-	// Check if the credentials file exists
-	file, err := os.Open(configPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errors.New("no credentials found, please log in using `bb auth login`")
-		}
-		return nil, fmt.Errorf("error opening credentials file: %w", err)
-	}
-	defer file.Close()
-
-	// Decode the credentials file
-	var creds Credentials
-	if err := json.NewDecoder(file).Decode(&creds); err != nil {
-		return nil, fmt.Errorf("error decoding credentials file: %w", err)
-	}
-
-	// Verify that the requested server URL matches
-	if creds.ServerURL != serverURL {
-		return nil, fmt.Errorf("no credentials found for server: %s", serverURL)
-	}
-
-	return &creds, nil
 }

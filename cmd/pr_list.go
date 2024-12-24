@@ -40,16 +40,15 @@ var prListCmd = &cobra.Command{
 		}
 		workspace, repoSlug := parts[0], parts[1]
 
-		// Step 2: Retrieve credentials
-		serverURL := "https://api.bitbucket.org"
-		creds, err := auth.RetrieveCredentials(serverURL)
+		// Step 2: Retrieve the API token
+		apiToken, err := auth.RetrieveCredentials("https://api.bitbucket.org")
 		if err != nil {
 			fmt.Printf("Error retrieving credentials: %v\n", err)
 			os.Exit(1)
 		}
 
 		// Step 3: Build the API request
-		apiURL := fmt.Sprintf("%s/2.0/repositories/%s/%s/pullrequests", serverURL, workspace, repoSlug)
+		apiURL := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests", workspace, repoSlug)
 		req, err := http.NewRequest("GET", apiURL, nil)
 		if err != nil {
 			fmt.Printf("Error creating request: %v\n", err)
@@ -57,12 +56,7 @@ var prListCmd = &cobra.Command{
 		}
 
 		// Step 4: Set the Authorization header
-		if creds.APIToken != "" {
-			req.Header.Set("Authorization", "Bearer "+creds.APIToken)
-		} else {
-			fmt.Println("No valid credentials found.")
-			os.Exit(1)
-		}
+		req.Header.Set("Authorization", "Bearer "+apiToken)
 
 		// Step 5: Make the request
 		client := &http.Client{}
