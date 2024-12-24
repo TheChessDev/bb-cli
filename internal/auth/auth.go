@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 )
 
 type Credentials struct {
@@ -83,7 +84,9 @@ func loadToken() (string, error) {
 		}
 		return "", fmt.Errorf("failed to read token file: %w", err)
 	}
-	return string(data), nil
+	token := strings.TrimSpace(string(data))
+	fmt.Printf("Debug: Loaded token: %s\n", token)
+	return token, nil
 }
 
 // loadCredentials reads OAuth credentials from the credentials file
