@@ -3,90 +3,84 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
-	"strings"
+	"sort"
+	"text/tabwriter"
+	"time"
 
-	"github.com/TheChessDev/bb-cli/internal/auth"
 	"github.com/spf13/cobra"
 )
 
+// PullRequest represents a Bitbucket pull request.
 type PullRequest struct {
-	ID     int    `json:"id"`
-	Title  string `json:"title"`
-	Author struct {
-		DisplayName string `json:"display_name"`
-	} `json:"author"`
+	ID        int       `json:"id"`
+	Title     string    `json:"title"`
+	Branch    string    `json:"branch"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
-type PullRequestResponse struct {
-	Values []PullRequest `json:"values"`
+// Dummy function to simulate fetching pull requests
+func fetchPullRequests() []PullRequest {
+	// Simulated data
+	return []PullRequest{
+		{ID: 1, Title: "Fix bug", Branch: "fix/bug", CreatedAt: time.Now().Add(-1 * time.Hour)},
+		// Add 30+ items here for testing
+	}
 }
+
+var jsonOutput bool
 
 var prListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List pull requests in the current repository",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Step 1: Use the validated repository context
-		if repositoryContext == "" {
-			fmt.Println("Error: repository context not set. Ensure you are in a valid Bitbucket repository.")
-			os.Exit(1)
+		// Fetch pull requests (replace this with actual API call)
+		prs := fetchPullRequests()
+
+		// Sort pull requests by creation date
+		sort.Slice(prs, func(i, j int) bool {
+			return prs[i].CreatedAt.After(prs[j].CreatedAt)
+		})
+
+		// Limit to 30 results
+		if len(prs) > 30 {
+			prs = prs[:30]
 		}
 
-		parts := strings.Split(repositoryContext, "/")
-		if len(parts) != 2 {
-			fmt.Println("Error: invalid repository context")
-			os.Exit(1)
-		}
-		workspace, repoSlug := parts[0], parts[1]
-
-		// Step 2: Retrieve the API token
-		apiToken, err := auth.RetrieveCredentials("https://api.bitbucket.org")
-		if err != nil {
-			fmt.Printf("Error retrieving credentials: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Step 3: Build the API request
-		apiURL := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests", workspace, repoSlug)
-		req, err := http.NewRequest("GET", apiURL, nil)
-		if err != nil {
-			fmt.Printf("Error creating request: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Step 4: Set the Authorization header
-		req.Header.Set("Authorization", "Bearer "+apiToken)
-
-		// Step 5: Make the request
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			fmt.Printf("Error making request: %v\n", err)
-			os.Exit(1)
-		}
-		defer resp.Body.Close()
-
-		// Step 6: Handle the response
-		if resp.StatusCode != http.StatusOK {
-			fmt.Printf("Error: received status code %d\n", resp.StatusCode)
-			os.Exit(1)
-		}
-
-		// Step 7: Decode and display the response
-		var prResponse PullRequestResponse
-		if err := json.NewDecoder(resp.Body).Decode(&prResponse); err != nil {
-			fmt.Printf("Error decoding response: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Println("Pull Requests:")
-		for _, pr := range prResponse.Values {
-			fmt.Printf("- ID: %d | Title: %s | Author: %s\n", pr.ID, pr.Title, pr.Author.DisplayName)
+		if jsonOutput {
+			// Output as JSON for bb.nvim
+			jsonData, err := json.Marshal(prs)
+			if err != nil {
+				fmt.Printf("Error marshaling JSON: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println(string(jsonData))
+		} else {
+			// Output as a table for CLI users
+			printPullRequestsTable(prs)
 		}
 	},
 }
 
+// Print pull requests as a table
+func printPullRequestsTable(prs []PullRequest) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tTITLE\tBRANCH\tCREATED AT")
+	fmt.Fprintln(w, "---\t-----\t------\t----------")
+
+	for _, pr := range prs {
+		fmt.Fprintf(w, "#%d\t%s\t%s\t%s\n",
+			pr.ID,
+			pr.Title,
+			pr.Branch,
+			pr.CreatedAt.Format("2006-01-02 15:04:05"),
+		)
+	}
+
+	w.Flush()
+}
+
 func init() {
+	prListCmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 	prCmd.AddCommand(prListCmd)
 }

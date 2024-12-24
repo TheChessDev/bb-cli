@@ -85,7 +85,6 @@ func loadToken() (string, error) {
 		return "", fmt.Errorf("failed to read token file: %w", err)
 	}
 	token := strings.TrimSpace(string(data))
-	fmt.Printf("Debug: Loaded token: %s\n", token)
 	return token, nil
 }
 
